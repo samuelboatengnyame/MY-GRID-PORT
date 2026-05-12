@@ -1,0 +1,6 @@
+{
+  "name": "Lumina Gallery",
+  "description": "A modern, responsive photo gallery and album management app with cloud sync and elegant animations.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["photo_gallery", "firebase_auth", "firestore"]
+}

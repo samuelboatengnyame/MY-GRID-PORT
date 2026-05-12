@@ -1,0 +1,106 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(resourceData) {
+      return isSignedIn() && resourceData.ownerId == request.auth.uid;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    // --- Entity Validations ---
+
+    function isValidPhoto(data) {
+      return data.keys().hasAll(['url', 'ownerId', 'createdAt', 'width', 'height']) &&
+             data.keys().size() <= 10 && // Allow for optional fields like title, description, albumId, updatedAt, isFavorite
+             data.url is string && data.url.size() < 1000000 && // 1MB URL max (dataURL)
+             data.ownerId == request.auth.uid &&
+             data.width is number && data.height is number &&
+             (data.get('title', '') is string && data.get('title', '').size() <= 200) &&
+             (data.get('description', '') is string && data.get('description', '').size() <= 1000) &&
+             (data.get('albumId', null) == null || data.albumId is string) &&
+             (data.get('isFavorite', false) is bool);
+    }
+
+    function isValidAlbum(data) {
+      return data.keys().hasAll(['name', 'ownerId', 'createdAt']) &&
+             data.keys().size() <= 6 &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.ownerId == request.auth.uid &&
+             (data.get('description', '') is string && data.get('description', '').size() <= 500) &&
+             (data.get('coverPhotoUrl', '') is string);
+    }
+
+    // --- Collection Rules ---
+
+    match /photos/{photoId} {
+      allow get: if isOwner(existing());
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      
+      allow create: if isVerified() && 
+                    isValidId(photoId) && 
+                    isValidPhoto(incoming()) && 
+                    incoming().createdAt == request.time;
+      
+      allow update: if isOwner(existing()) && 
+                    isValidPhoto(incoming()) && 
+                    incoming().ownerId == existing().ownerId &&
+                    incoming().createdAt == existing().createdAt &&
+                    incoming().updatedAt == request.time &&
+                    (
+                      // Action: Edit info
+                      incoming().diff(existing()).affectedKeys().hasAny(['title', 'description', 'updatedAt', 'albumId', 'isFavorite'])
+                    );
+      
+      allow delete: if isOwner(existing());
+    }
+
+    match /albums/{albumId} {
+      allow get: if isOwner(existing());
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+
+      allow create: if isVerified() && 
+                    isValidId(albumId) && 
+                    isValidAlbum(incoming()) && 
+                    incoming().createdAt == request.time;
+
+      allow update: if isOwner(existing()) && 
+                    isValidAlbum(incoming()) &&
+                    incoming().ownerId == existing().ownerId &&
+                    incoming().createdAt == existing().createdAt &&
+                    (
+                      incoming().diff(existing()).affectedKeys().hasAny(['name', 'description', 'coverPhotoUrl'])
+                    );
+
+      allow delete: if isOwner(existing());
+    }
+
+    match /users/{userId} {
+      allow get, write: if isSignedIn() && request.auth.uid == userId;
+    }
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "entities": {
+    "Photo": {
+      "title": "Photo",
+      "description": "A photo uploaded by a user",
+      "type": "object",
+      "properties": {
+        "url": { "type": "string", "description": "The URL of the photo (data URL or storage link)" },
+        "title": { "type": "string", "description": "Title of the photo" },
+        "description": { "type": "string", "description": "Description of the photo" },
+        "albumId": { "type": "string", "description": "The ID of the album this photo belongs to" },
+        "ownerId": { "type": "string", "description": "The UID of the user who owns this photo" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "isFavorite": { "type": "boolean" },
+        "width": { "type": "number" },
+        "height": { "type": "number" }
+      },
+      "required": ["url", "ownerId", "createdAt", "width", "height"]
+    },
+    "Album": {
+      "title": "Album",
+      "description": "A collection of photos",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "coverPhotoUrl": { "type": "string" }
+      },
+      "required": ["name", "ownerId", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/photos/{photoId}": {
+      "schema": "Photo",
+      "description": "Collection of all photos"
+    },
+    "/albums/{albumId}": {
+      "schema": "Album",
+      "description": "Collection of all albums"
+    }
+  }
+}
