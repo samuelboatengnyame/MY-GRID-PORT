@@ -5,17 +5,17 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from './hooks/useAuth';
-import { Navbar } from '@/components/layout/Navbar';
-import { Sidebar } from '@/components/layout/Sidebar';
-import { PhotoGrid } from '@/components/gallery/PhotoGrid';
-import { UploadDialog } from '@/components/gallery/UploadDialog';
-import { PhotoDetailDialog } from '@/components/gallery/PhotoDetailDialog';
-import { subscribeToPhotos, subscribeToAlbums } from '@/services/photoService';
-import { Photo, Album } from '@/types';
-import { Toaster } from '@/components/ui/sonner';
-import { Button } from '@/components/ui/button';
+import { Navbar } from './components/layout/Navbar';
+import { Sidebar } from './components/layout/Sidebar';
+import { PhotoGrid } from './components/gallery/PhotoGrid';
+import { UploadDialog } from './components/gallery/UploadDialog';
+import { PhotoDetailDialog } from './components/gallery/PhotoDetailDialog';
+import { subscribeToPhotos, subscribeToAlbums } from './services/photoService';
+import { Photo, Album } from './types';
+import { Toaster } from './components/ui/toaster';
+import { Button } from './components/ui/button';
 import { LogIn, Sparkles } from 'lucide-react';
-import { signInWithGoogle } from '@/lib/firebase';
+import { signInWithGoogle } from './lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
