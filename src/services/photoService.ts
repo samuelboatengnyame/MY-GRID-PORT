@@ -17,17 +17,25 @@ import { handleFirestoreError } from '@/lib/error-handler';
 const PHOTOS_COLLECTION = 'photos';
 const ALBUMS_COLLECTION = 'albums';
 
-export const subscribeToPhotos = (callback: (photos: Photo[]) => void) => {
+export const subscribeToPhotos = (albumId: string | null, callback: (photos: Photo[]) => void) => {
   if (!auth.currentUser) return () => {};
 
+  // Query only by userId to avoid complex composite indexes
   const q = query(
     collection(db, PHOTOS_COLLECTION),
-    where('ownerId', '==', auth.currentUser.uid),
-    orderBy('createdAt', 'desc')
+    where('userId', '==', auth.currentUser.uid)
   );
 
   return onSnapshot(q, (snapshot) => {
-    const photos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Photo));
+    const photos = snapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() } as Photo))
+      .filter(photo => photo.albumId === albumId) // In-memory album filtering
+      .sort((a, b) => {
+        // In-memory sorting by createdAt (desc)
+        const timeA = a.createdAt?.toMillis?.() || 0;
+        const timeB = b.createdAt?.toMillis?.() || 0;
+        return timeB - timeA;
+      });
     callback(photos);
   }, (error) => {
     handleFirestoreError(error, OperationType.LIST, PHOTOS_COLLECTION);
@@ -39,28 +47,39 @@ export const subscribeToAlbums = (callback: (albums: Album[]) => void) => {
 
   const q = query(
     collection(db, ALBUMS_COLLECTION),
-    where('ownerId', '==', auth.currentUser.uid),
-    orderBy('createdAt', 'desc')
+    where('ownerId', '==', auth.currentUser.uid)
   );
 
   return onSnapshot(q, (snapshot) => {
-    const albums = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Album));
+    const albums = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Album))
+      .sort((a, b) => {
+        const timeA = a.createdAt?.toMillis?.() || 0;
+        const timeB = b.createdAt?.toMillis?.() || 0;
+        return timeB - timeA;
+      });
     callback(albums);
   }, (error) => {
     handleFirestoreError(error, OperationType.LIST, ALBUMS_COLLECTION);
   });
 };
 
-export const addPhoto = async (photoData: Omit<Photo, 'id' | 'ownerId' | 'createdAt'>) => {
+export const addPhoto = async (photoData: Omit<Photo, 'id' | 'userId' | 'createdAt'>) => {
   if (!auth.currentUser) throw new Error('User not authenticated');
 
+  const cleanPhotoData = {
+    url: photoData.url,
+    title: photoData.title || '',
+    description: photoData.description || '',
+    albumId: photoData.albumId || null,
+    userId: auth.currentUser.uid,
+    createdAt: serverTimestamp(),
+    isFavorite: !!photoData.isFavorite,
+    width: photoData.width,
+    height: photoData.height
+  };
+
   try {
-    const docRef = await addDoc(collection(db, PHOTOS_COLLECTION), {
-      ...photoData,
-      ownerId: auth.currentUser.uid,
-      createdAt: serverTimestamp(),
-      isFavorite: photoData.isFavorite || false
-    });
+    const docRef = await addDoc(collection(db, PHOTOS_COLLECTION), cleanPhotoData);
     return docRef.id;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, PHOTOS_COLLECTION);

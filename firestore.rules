@@ -13,7 +13,7 @@ service cloud.firestore {
     }
 
     function isOwner(resourceData) {
-      return isSignedIn() && resourceData.ownerId == request.auth.uid;
+      return isSignedIn() && (resourceData.get('ownerId', '') == request.auth.uid || resourceData.get('userId', '') == request.auth.uid);
     }
 
     function isValidId(id) {
@@ -35,15 +35,19 @@ service cloud.firestore {
     // --- Entity Validations ---
 
     function isValidPhoto(data) {
-      return data.keys().hasAll(['url', 'ownerId', 'createdAt', 'width', 'height']) &&
-             data.keys().size() <= 10 && // Allow for optional fields like title, description, albumId, updatedAt, isFavorite
-             data.url is string && data.url.size() < 1000000 && // 1MB URL max (dataURL)
-             data.ownerId == request.auth.uid &&
+      return data.keys().hasAll(['url', 'userId', 'createdAt', 'width', 'height', 'albumId']) &&
+             data.keys().size() <= 12 &&
+             data.url is string && data.url.size() < 1048488 &&
+             data.userId == request.auth.uid &&
              data.width is number && data.height is number &&
-             (data.get('title', '') is string && data.get('title', '').size() <= 200) &&
-             (data.get('description', '') is string && data.get('description', '').size() <= 1000) &&
-             (data.get('albumId', null) == null || data.albumId is string) &&
+             (data.get('title', '') is string) &&
+             (data.get('description', '') is string) &&
+             (data.albumId == null || (data.albumId is string && isValidId(data.albumId))) &&
              (data.get('isFavorite', false) is bool);
+    }
+
+    function isAlbumOwner(albumId) {
+      return albumId == null || get(/databases/$(database)/documents/albums/$(albumId)).data.ownerId == request.auth.uid;
     }
 
     function isValidAlbum(data) {
@@ -58,32 +62,34 @@ service cloud.firestore {
     // --- Collection Rules ---
 
     match /photos/{photoId} {
-      allow get: if isOwner(existing());
-      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow get: if isOwner(resource.data);
+      allow list: if isOwner(resource.data);
       
-      allow create: if isVerified() && 
+      allow create: if isSignedIn() && 
                     isValidId(photoId) && 
                     isValidPhoto(incoming()) && 
-                    incoming().createdAt == request.time;
+                    incoming().createdAt == request.time &&
+                    isAlbumOwner(incoming().albumId);
       
-      allow update: if isOwner(existing()) && 
+      allow update: if isOwner(resource.data) && 
                     isValidPhoto(incoming()) && 
-                    incoming().ownerId == existing().ownerId &&
-                    incoming().createdAt == existing().createdAt &&
+                    (incoming().get('userId', '') == resource.data.get('userId', '') || incoming().get('userId', '') == '') &&
+                    (incoming().get('ownerId', '') == resource.data.get('ownerId', '') || incoming().get('ownerId', '') == '') &&
+                    incoming().createdAt == resource.data.createdAt &&
                     incoming().updatedAt == request.time &&
+                    isAlbumOwner(incoming().albumId) &&
                     (
-                      // Action: Edit info
-                      incoming().diff(existing()).affectedKeys().hasAny(['title', 'description', 'updatedAt', 'albumId', 'isFavorite'])
+                      incoming().diff(resource.data).affectedKeys().hasAny(['title', 'description', 'updatedAt', 'albumId', 'isFavorite'])
                     );
       
-      allow delete: if isOwner(existing());
+      allow delete: if isOwner(resource.data);
     }
 
     match /albums/{albumId} {
       allow get: if isOwner(existing());
       allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
 
-      allow create: if isVerified() && 
+      allow create: if isSignedIn() && 
                     isValidId(albumId) && 
                     isValidAlbum(incoming()) && 
                     incoming().createdAt == request.time;

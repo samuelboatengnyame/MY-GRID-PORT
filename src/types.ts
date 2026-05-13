@@ -3,10 +3,10 @@ import { Timestamp } from 'firebase/firestore';
 export interface Photo {
   id: string;
   url: string;
-  title?: string;
+  title: string;
   description?: string;
-  albumId?: string;
-  ownerId: string;
+  albumId: string | null;
+  userId: string;
   createdAt: Timestamp;
   updatedAt?: Timestamp;
   isFavorite: boolean;

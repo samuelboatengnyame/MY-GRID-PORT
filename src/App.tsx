@@ -32,7 +32,7 @@ export default function App() {
   useEffect(() => {
     if (user) {
       setIsLoading(true);
-      const unsubscribePhotos = subscribeToPhotos((data) => {
+      const unsubscribePhotos = subscribeToPhotos(null, (data) => {
         setPhotos(data);
         setIsLoading(false);
       });

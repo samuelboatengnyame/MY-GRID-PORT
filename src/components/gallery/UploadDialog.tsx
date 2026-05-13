@@ -32,6 +32,10 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const selectedFile = acceptedFiles[0];
     if (selectedFile) {
+      if (selectedFile.size > 4 * 1024 * 1024) {
+        toast.error('File size exceeds 4MB limit');
+        return;
+      }
       setFile(selectedFile);
       const reader = new FileReader();
       reader.onload = (e) => setPreview(e.target?.result as string);
@@ -42,7 +46,8 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: { 'image/*': [] },
-    multiple: false
+    multiple: false,
+    maxSize: 4 * 1024 * 1024
   } as any);
 
   const handleUpload = async () => {
@@ -51,23 +56,81 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
 
     setUploading(true);
     try {
-      const finalUrl = method === 'upload' ? preview! : url;
+      const sourceUrl = method === 'upload' ? preview! : url;
       
-      // Get image dimensions
+      // Load image to get dimensions and for canvas processing
       const img = new Image();
-      img.src = finalUrl;
+      img.src = sourceUrl;
       await new Promise((resolve, reject) => {
-        img.onload = resolve;
-        img.onerror = reject;
+        const timeout = setTimeout(() => reject(new Error('Image load timed out')), 15000);
+        img.onload = () => {
+          clearTimeout(timeout);
+          resolve(null);
+        };
+        img.onerror = () => {
+          clearTimeout(timeout);
+          reject(new Error('Failed to load image. If using a URL, it might be blocked by its source.'));
+        };
       });
 
+      let finalUrlToStore = sourceUrl;
+      let finalWidth = img.width;
+      let finalHeight = img.height;
+
+      // Robust compression for local uploads or large URLs
+      if (sourceUrl.startsWith('data:') || sourceUrl.length > 1000000) {
+        const MAX_DIMENSION = 1600;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+          if (width > height) {
+            height = Math.round((height * MAX_DIMENSION) / width);
+            width = MAX_DIMENSION;
+          } else {
+            width = Math.round((width * MAX_DIMENSION) / height);
+            height = MAX_DIMENSION;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('Could not create canvas context');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Quality compression loop
+        let quality = 0.9;
+        const MAX_BYTES = 1048487; // User specified limit
+        
+        finalUrlToStore = canvas.toDataURL('image/jpeg', quality);
+        
+        while (finalUrlToStore.length > MAX_BYTES && quality > 0.1) {
+          quality -= 0.1;
+          finalUrlToStore = canvas.toDataURL('image/jpeg', quality);
+        }
+
+        if (finalUrlToStore.length > MAX_BYTES) {
+          // One last attempt at very low quality
+          finalUrlToStore = canvas.toDataURL('image/jpeg', 0.05);
+          if (finalUrlToStore.length > MAX_BYTES) {
+            throw new Error('Image is too complex to compress under 1MB. Please try a smaller or simpler image.');
+          }
+        }
+
+        finalWidth = width;
+        finalHeight = height;
+      }
+
       await addPhoto({
-        url: finalUrl,
+        url: finalUrlToStore,
         title: title || (file?.name ? file.name.split('.')[0] : 'Untitled'),
         description,
-        width: img.width,
-        height: img.height,
-        isFavorite: false
+        width: Math.round(finalWidth),
+        height: Math.round(finalHeight),
+        isFavorite: false,
+        albumId: null // Support for albums can be added here
       });
 
       toast.success('Photo uploaded successfully');
@@ -77,9 +140,10 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
       setTitle('');
       setDescription('');
       onOpenChange(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      toast.error('Failed to upload photo');
+      const message = error.message?.includes('{') ? 'Check your internet or permissions' : (error.message || 'Failed to upload photo');
+      toast.error(message);
     } finally {
       setUploading(false);
     }
