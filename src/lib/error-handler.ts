@@ -1,5 +1,5 @@
-import { auth } from './firebase';
-import { OperationType, FirestoreErrorInfo } from '../types';
+import { auth } from '@/lib/firebase';
+import { OperationType, FirestoreErrorInfo } from '@/types';
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
   const errInfo: FirestoreErrorInfo = {

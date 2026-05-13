@@ -10,9 +10,9 @@ import {
   doc, 
   serverTimestamp 
 } from 'firebase/firestore';
-import { db, auth } from '../lib/firebase';
-import { Photo, Album, OperationType } from '../types';
-import { handleFirestoreError } from '../lib/error-handler';
+import { db, auth } from '@/lib/firebase';
+import { Photo, Album, OperationType } from '@/types';
+import { handleFirestoreError } from '@/lib/error-handler';
 
 const PHOTOS_COLLECTION = 'photos';
 const ALBUMS_COLLECTION = 'albums';
